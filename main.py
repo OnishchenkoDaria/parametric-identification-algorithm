@@ -75,7 +75,38 @@ def get_y(a_matr, y_cur, h):
     k4 = h * np.dot(a_matr, y_cur + k3)
     return y_cur + (k1 + 2 * k2 + 2 * k3 + k4) / 6
 
-# Approximate the parameters based on observations
+def custom_hstack(arr1, arr2):
+    if arr1.shape[0] != arr2.shape[0]:
+        raise ValueError("Arrays must have the same number of rows to be stacked horizontally.")
+    return np.concatenate((arr1, arr2), axis=1)
+
+#custom matrix inverse function using Gaussian elimination
+def matrix_inv(matrix):
+    n = matrix.shape[0]
+    identity = np.eye(n)
+    
+    #augment the original matrix with the identity matrix
+    augmented_matrix = custom_hstack(matrix, identity)
+    
+    #perform Gaussian elimination to convert the left part of the augmented matrix to identity
+    for i in range(n):
+        if augmented_matrix[i, i] == 0:
+            raise ValueError("Matrix is singular and cannot be inverted.")
+        
+        augmented_matrix[i] = augmented_matrix[i] / augmented_matrix[i, i]
+        
+        for j in range(i + 1, n):
+            factor = augmented_matrix[j, i]
+            augmented_matrix[j] = augmented_matrix[j] - factor * augmented_matrix[i]
+    
+    #back substitution to eliminate the upper triangle
+    for i in range(n - 1, -1, -1):
+        for j in range(i - 1, -1, -1):
+            factor = augmented_matrix[j, i]
+            augmented_matrix[j] = augmented_matrix[j] - factor * augmented_matrix[i]
+    
+    return augmented_matrix[:, n:]
+
 def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
     a_matrix = model_mtrx().subs(params) 
     beta_vector = np.array([0.1, 10, 21])
@@ -107,8 +138,9 @@ def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
         integral_part_mult *= h
         quality_degree *= h
 
-        #solve for the parameter updates
-        delta_beta = np.dot(np.linalg.inv(integral_part_inverse), integral_part_mult.flatten())
+        #solve for the parameter updates using the custom matrix inverse
+        integral_part_inverse_inv = matrix_inv(integral_part_inverse)
+        delta_beta = np.dot(integral_part_inverse_inv, integral_part_mult.flatten())
         beta_vector += delta_beta
 
         #update the parameter values
@@ -129,9 +161,8 @@ def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
 if __name__ == "__main__":
     input_data = read_numbers_from_file('y1.txt')
     c1, c2, c3, c4, m1, m2, m3 = sp.symbols('c1 c2 c3 c4 m1 m2 m3')
-    to_approx = {c1: 0.14, c2: 0.3, c4: 0.12, m2: 28}  # Known parameters (fixed)
-    initial_beta = {c3: 0.1, m1: 10, m3: 21}  # Initial approximation for β = (c3, m1, m3)
+    to_approx = {c1: 0.14, c2: 0.3, c4: 0.12, m2: 28} 
+    initial_beta = {c3: 0.1, m1: 10, m3: 21}  # initial approximation for β = (c3, m1, m3)
 
-    # Run the approximation process
     result = approximate(input_data, to_approx, [c3, m1, m3], initial_beta, eps=1e-6)
     print("Approximated values: ", result)
