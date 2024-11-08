@@ -1,7 +1,8 @@
 import numpy as np
 import sympy as sp
+import matplotlib.pyplot as plt
 
-#read file and return the transposed matrix
+# read file and return the transposed matrix
 def read_numbers_from_file(filename):
     with open(filename, 'r') as file:
         lines = file.readlines()
@@ -13,29 +14,28 @@ def read_numbers_from_file(filename):
         input_data.append(row)
     return np.array(input_data).T
 
-
-#setting b vectors fir iterations
+# setting b vectors for iterations
 def set_B0():
     return np.array([0.1, 10, 21])
 
-#matrix of the mathimatical problem
+# matrix of the mathematical problem
 def model_mtrx():
     c1, c2, c3, c4, m1, m2, m3 = sp.symbols('c1 c2 c3 c4 m1 m2 m3')
     A = [[0, 1, 0, 0, 0, 0],
-        [-(c2 + c1) / m1, 0, c2 / m1, 0, 0, 0],
-        [0, 0, 0, 1, 0, 0],
-        [c2 / m2, 0, -(c2 + c3) / m2, 0, c3 / m2, 0],
-        [0, 0, 0, 0, 0, 1],
-        [0, 0, c3 / m3, 0, -(c4 + c3) / m3, 0]]
+         [-(c2 + c1) / m1, 0, c2 / m1, 0, 0, 0],
+         [0, 0, 0, 1, 0, 0],
+         [c2 / m2, 0, -(c2 + c3) / m2, 0, c3 / m2, 0],
+         [0, 0, 0, 0, 0, 1],
+         [0, 0, c3 / m3, 0, -(c4 + c3) / m3, 0]]
     return sp.Matrix(A)
 
-#custom derivative function
+# custom derivative function
 def numerical_derivative(func, var, values, delta=1e-6):
-    #create a copy of values to modify for numerical differentiation
+    # create a copy of values to modify for numerical differentiation
     values_plus = values.copy()
     values_minus = values.copy()
 
-    #perturb the variable by delta to approximate the derivative
+    # perturb the variable by delta to approximate the derivative
     values_plus[var] += delta
     values_minus[var] -= delta
 
@@ -43,13 +43,12 @@ def numerical_derivative(func, var, values, delta=1e-6):
     
     return diff
 
-#derivatives with respect to variable
+# derivatives with respect to variable
 def get_derivative(y_vec, b_vec, b_values):
-    
     derivs = [] 
     
     for y_i in y_vec:
-        #for each b_i (as an index)
+        # for each b_i (as an index)
         for b_i in b_vec:
             derivative = numerical_derivative(y_i, b_i, b_values)
             derivs.append(derivative)
@@ -58,7 +57,7 @@ def get_derivative(y_vec, b_vec, b_values):
     der_matr = [derivs[i:i + cols_n] for i in range(0, len(derivs), cols_n)]
     return np.array(der_matr)
 
-# Compute Runge-Kutta step for u matrix
+# compute Runge-Kutta step for u matrix and track each iteration for plotting
 def get_u_matr(a_matr, b_matr, u_matr, h):
     b_arrayed = np.array(b_matr.tolist())
     k1 = h * (np.dot(a_matr, u_matr) + b_arrayed)
@@ -67,7 +66,7 @@ def get_u_matr(a_matr, b_matr, u_matr, h):
     k4 = h * (np.dot(a_matr, u_matr + k3) + b_arrayed)
     return u_matr + (k1 + 2 * k2 + 2 * k3 + k4) / 6
 
-# Compute Runge-Kutta step for y matrix
+# compute Runge-Kutta step for y matrix and track each iteration for plotting
 def get_y(a_matr, y_cur, h):
     k1 = h * np.dot(a_matr, y_cur)
     k2 = h * np.dot(a_matr, y_cur + k1 / 2)
@@ -77,7 +76,7 @@ def get_y(a_matr, y_cur, h):
 
 def custom_hstack(arr1, arr2):
     if arr1.shape[0] != arr2.shape[0]:
-        raise ValueError("Arrays must have the same number of rows to be stacked horizontally.")
+        raise ValueError("arrays must have the same number of rows to be stacked horizontally.")
     return np.concatenate((arr1, arr2), axis=1)
 
 #custom matrix inverse function using Gaussian elimination
@@ -91,7 +90,7 @@ def matrix_inv(matrix):
     #perform Gaussian elimination to convert the left part of the augmented matrix to identity
     for i in range(n):
         if augmented_matrix[i, i] == 0:
-            raise ValueError("Matrix is singular and cannot be inverted.")
+            raise ValueError("matrix is singular and cannot be inverted.")
         
         augmented_matrix[i] = augmented_matrix[i] / augmented_matrix[i, i]
         
@@ -107,10 +106,16 @@ def matrix_inv(matrix):
     
     return augmented_matrix[:, n:]
 
+# approximation method with plotting
 def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
     a_matrix = model_mtrx().subs(params) 
     beta_vector = np.array([0.1, 10, 21])
 
+    # track iteration and error for plotting
+    errors = []
+    iterations = []
+
+    iteration = 0
     while True:
         a_complete = np.array((a_matrix.subs(beta_values)).tolist())  
         u_matr = np.zeros((6, 3))
@@ -145,18 +150,31 @@ def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
 
         #update the parameter values
         beta_values = {
-            beta_symbols[0]: beta_vector[0],
-            beta_symbols[1]: beta_vector[1],
-            beta_symbols[2]: beta_vector[2]
+            beta_symbols[0]: round(beta_vector[0], 4),
+            beta_symbols[1]: round(beta_vector[1], 4),
+            beta_symbols[2]: round(beta_vector[2], 4)
         }
 
-        print("Current approximated values : ", beta_vector)
-        print("Delta : ", quality_degree)
+        # store iteration count and error for plotting
+        errors.append(quality_degree)
+        iterations.append(iteration)
+        
+        # print rounded outputs for readability
+        print(f"Iteration {iteration}:")
+        print(f"  Current approximated values: {beta_values}")
+        print(f"  Quality Degree (Delta): {round(quality_degree, 6)}")
 
-        #stop if the quality accuracy reached
+        # stop if the quality accuracy reached
         if quality_degree < eps:
+            plt.plot(iterations, errors, marker='o')
+            plt.xlabel("Iterations")
+            plt.ylabel("Error")
+            plt.title("Convergence of Parameter Approximation")
+            plt.show()
             return beta_values
-        print(f"Delta is greater than {eps} -> next iteration")
+
+        print(f"  Delta is greater than {eps} -> moving to the next iteration\n")
+        iteration += 1
 
 if __name__ == "__main__":
     input_data = read_numbers_from_file('y1.txt')
