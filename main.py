@@ -1,120 +1,137 @@
 import numpy as np
+import sympy as sp
 
+#read file and return the transposed matrix
 def read_numbers_from_file(filename):
     with open(filename, 'r') as file:
-        content = file.read()
-        numbers = list(map(float, content.split()))
-    return numbers
+        lines = file.readlines()
+    input_data = []
+    
+    for line in lines:
+        values = line.strip().split()
+        row = [float(value) for value in values]
+        input_data.append(row)
+    return np.array(input_data).T
+
 
 #setting b vectors fir iterations
 def set_B0():
-    B0 = np.zeros((3, 1))
-    B0[:, 0] = [0.1, 10, 21]
-    return B0
-
-B = np.zeros((3, 1))
-
-def set_B(c3, m1, m3):
-    B[:, 0] = [c3, m1, m3]
-
+    return np.array([0.1, 10, 21])
 
 #matrix of the mathimatical problem
-def model_mtrx(c1, c2, c3, c4, m1, m2, m3):
-    # c3, m1, m3 - remain uninitialized, need to find
+def model_mtrx():
+    c1, c2, c3, c4, m1, m2, m3 = sp.symbols('c1 c2 c3 c4 m1 m2 m3')
     A = [[0, 1, 0, 0, 0, 0],
-        [ -(c1 + c2)/m1, 0, c2/m1, 0, 0, 0],
+        [-(c2 + c1) / m1, 0, c2 / m1, 0, 0, 0],
         [0, 0, 0, 1, 0, 0],
-        [c2/m2, 0, -(c2 + c3)/ m2, 0, c3/m3, 0],
+        [c2 / m2, 0, -(c2 + c3) / m2, 0, c3 / m2, 0],
         [0, 0, 0, 0, 0, 1],
-        [0, 0, c3/m3, 0, -(c3+c4)/m3, 0]]
-    return A
+        [0, 0, c3 / m3, 0, -(c4 + c3) / m3, 0]]
+    return sp.Matrix(A)
 
+#custom derivative function
+def numerical_derivative(func, var, values, delta=1e-6):
+    #create a copy of values to modify for numerical differentiation
+    values_plus = values.copy()
+    values_minus = values.copy()
+
+    #perturb the variable by delta to approximate the derivative
+    values_plus[var] += delta
+    values_minus[var] -= delta
+
+    diff = (func.subs(values_plus) - func.subs(values_minus)) / (2 * delta)
+    
+    return diff
 
 #derivatives with respect to variable
-def get_derivative(y_vec, b_vec, b_values, h=1e-5):
-
+def get_derivative(y_vec, b_vec, b_values):
+    
     derivs = [] 
-
+    
     for y_i in y_vec:
-        #set primary y0 
-        y_original = y_i(b_values) 
-        row = []
-        
         #for each b_i (as an index)
         for b_i in b_vec:
-            #apdate b_i with step
-            temp = b_values[b_i]
-            b_values[b_i] = temp + h
-            y_step = y_i(b_values)
-            
-            #calculate derivative using formula
-            d = (y_step - y_original) / h
-            row.append(d)
-
-            #set to default
-            b_values[b_i] = temp
-        
-        derivs.append(row)
-
-    return derivs
-
-#partial derivatives of the vector Ay with respect to the vector beta
-""" def compute_A_deriv_beta(Ay, beta, h=1e-5):
+            derivative = numerical_derivative(y_i, b_i, b_values)
+            derivs.append(derivative)
     
-    num_rows = len(Ay)
-    num_cols = len(beta)
-    derivative_matrix = np.zeros((num_rows, num_cols))
+    cols_n = len(b_vec)
+    der_matr = [derivs[i:i + cols_n] for i in range(0, len(derivs), cols_n)]
+    return np.array(der_matr)
 
-    for i in range(num_rows):
-        for j in range(num_cols):
-            
-            #copy data
-            beta_step = list(beta)
-            beta_step[j] += h  #step of finite difference
-            
-            # aproximate the derivative using the finite difference method
-            f_x_plus_h = Ay[i](beta_step)  #Ay evaluated at beta + h for j-th element
-            f_x = Ay[i](beta)              #Ay evaluated at the original beta
-            
-            #finite difference and store it in the matrix
-            derivative_matrix[i][j] = (f_x_plus_h - f_x) / h
-    
-    return derivative_matrix """
-
-def mat_vec_mult(matrix, vector):
-        #multiplies a matrix with a vector
-        result = []
-        for row in matrix:
-            result.append(sum(x * v for x, v in zip(row, vector)))
-        return result
-
-#using runge-kutta
+# Compute Runge-Kutta step for u matrix
 def get_u_matr(a_matr, b_matr, u_matr, h):
-    #convert b_matr to an array
-    b_arrayed = b_matr.tolist()    
-    
-    #method formula
-    k1 = h * (mat_vec_mult(a_matr, u_matr) + b_arrayed)
-    k2 = h * (mat_vec_mult(a_matr, [u + k / 2 for u, k in zip(u_matr, k1)]) + b_arrayed)
-    k3 = h * (mat_vec_mult(a_matr, [u + k / 2 for u, k in zip(u_matr, k2)]) + b_arrayed)
-    k4 = h * (mat_vec_mult(a_matr, [u + k for u, k in zip(u_matr, k3)]) + b_arrayed)
+    b_arrayed = np.array(b_matr.tolist())
+    k1 = h * (np.dot(a_matr, u_matr) + b_arrayed)
+    k2 = h * (np.dot(a_matr, u_matr + k1 / 2) + b_arrayed)
+    k3 = h * (np.dot(a_matr, u_matr + k2 / 2) + b_arrayed)
+    k4 = h * (np.dot(a_matr, u_matr + k3) + b_arrayed)
+    return u_matr + (k1 + 2 * k2 + 2 * k3 + k4) / 6
 
-    #return the updated u_matr
-    return [u + (k1_val + 2 * k2_val + 2 * k3_val + k4_val) / 6 for u, k1_val, k2_val, k3_val, k4_val in zip(u_matr, k1, k2, k3, k4)]
-
+# Compute Runge-Kutta step for y matrix
 def get_y(a_matr, y_cur, h):
+    k1 = h * np.dot(a_matr, y_cur)
+    k2 = h * np.dot(a_matr, y_cur + k1 / 2)
+    k3 = h * np.dot(a_matr, y_cur + k2 / 2)
+    k4 = h * np.dot(a_matr, y_cur + k3)
+    return y_cur + (k1 + 2 * k2 + 2 * k3 + k4) / 6
 
-    #calculate k1, k2, k3, k4 using matrix-vector multiplication manually
-    k1 = h * mat_vec_mult(a_matr, y_cur)
-    k2 = h * mat_vec_mult(a_matr, [y + k1_elem / 2 for y, k1_elem in zip(y_cur, k1)])
-    k3 = h * mat_vec_mult(a_matr, [y + k2_elem / 2 for y, k2_elem in zip(y_cur, k2)])
-    k4 = h * mat_vec_mult(a_matr, [y + k3_elem for y, k3_elem in zip(y_cur, k3)])
+# Approximate the parameters based on observations
+def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
+    a_matrix = model_mtrx().subs(params) 
+    beta_vector = np.array([0.1, 10, 21])
 
-    #return the updated y_cur]
-    return [y + (k1_elem + 2 * k2_elem + 2 * k3_elem + k4_elem) / 6 for y, k1_elem, k2_elem, k3_elem, k4_elem in zip(y_cur, k1, k2, k3, k4)]
+    while True:
+        a_complete = np.array((a_matrix.subs(beta_values)).tolist())  
+        u_matr = np.zeros((6, 3))
+        quality_degree = 0
+        integral_part_inverse = np.zeros((3, 3))
+        integral_part_mult = np.zeros((1, 3))
+        y_approximation = y_matr[0]
+
+        for i in range(len(y_matr)):
+            b_derivative_matr = get_derivative(a_matrix * sp.Matrix(y_approximation), beta_symbols, beta_values)
+
+            #accumulate integrals for the update rule
+            integral_part_inverse += np.dot(u_matr.T, u_matr).astype('float64')
+            integral_part_mult += np.dot(u_matr.T, y_matr[i] - y_approximation).astype('float64')
+
+            #calculate the quality degree (error measure)
+            quality_degree += np.dot((y_matr[i] - y_approximation).T, y_matr[i] - y_approximation)
+
+            #update u_matr and y_approximation
+            u_matr = get_u_matr(a_complete, b_derivative_matr, u_matr, h)
+            y_approximation = get_y(a_complete, y_approximation, h)
+
+        #scale integrals by step size
+        integral_part_inverse *= h
+        integral_part_mult *= h
+        quality_degree *= h
+
+        #solve for the parameter updates
+        delta_beta = np.dot(np.linalg.inv(integral_part_inverse), integral_part_mult.flatten())
+        beta_vector += delta_beta
+
+        #update the parameter values
+        beta_values = {
+            beta_symbols[0]: beta_vector[0],
+            beta_symbols[1]: beta_vector[1],
+            beta_symbols[2]: beta_vector[2]
+        }
+
+        print("Current approximated values : ", beta_vector)
+        print("Delta : ", quality_degree)
+
+        #stop if the quality accuracy reached
+        if quality_degree < eps:
+            return beta_values
+        print(f"Delta is greater than {eps} -> next iteration")
 
 if __name__ == "__main__":
-    numbers = read_numbers_from_file("y1.txt")
-    print(numbers[0])
-    A = model_mtrx(1, 2, 3, 4, 4, 5, 6)
-    print(A)
+    input_data = read_numbers_from_file('y1.txt')
+    c1, c2, c3, c4, m1, m2, m3 = sp.symbols('c1 c2 c3 c4 m1 m2 m3')
+    to_approx = {c1: 0.14, c2: 0.3, c4: 0.12, m2: 28}  # Known parameters (fixed)
+    initial_beta = {c3: 0.1, m1: 10, m3: 21}  # Initial approximation for β = (c3, m1, m3)
+
+    # Run the approximation process
+    result = approximate(input_data, to_approx, [c3, m1, m3], initial_beta, eps=1e-6)
+    print("Approximated values: ", result)
