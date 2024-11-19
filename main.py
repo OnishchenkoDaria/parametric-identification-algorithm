@@ -114,6 +114,7 @@ def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
     # track iteration and error for plotting
     errors = []
     iterations = []
+    approximated_y = []
 
     iteration = 0
     while True:
@@ -137,6 +138,7 @@ def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
             #update u_matr and y_approximation
             u_matr = get_u_matr(a_complete, b_derivative_matr, u_matr, h)
             y_approximation = get_y(a_complete, y_approximation, h)
+            approximated_y.append(y_approximation)
 
         #scale integrals by step size
         integral_part_inverse *= h
@@ -166,10 +168,35 @@ def approximate(y_matr, params, beta_symbols, beta_values, eps, h=0.2):
 
         # stop if the quality accuracy reached
         if quality_degree < eps:
+            # number of subplots
+            num_comparisons = len(y_matr[0])
+            rows, cols = 2, 3 #setting plot display grid
+
+            # plot convergence of the error
+            plt.figure(figsize=(15, 12)) 
+            plt.subplot(rows + 1, cols, 1)
             plt.plot(iterations, errors, marker='o')
             plt.xlabel("Iterations")
             plt.ylabel("Error")
             plt.title("Convergence of Parameter Approximation")
+
+            # plot comparison of original and approximated `y`
+            time_steps = np.arange(250) 
+
+            for idx in range(num_comparisons):
+                plt.subplot(rows + 1, cols, idx + 4)  # offset by 3 for the error plot
+                original = y_matr[:250, idx]
+                approximated = np.array(approximated_y)[:250, idx]
+
+                plt.plot(time_steps, original, label=f"original y{idx + 1}")
+                plt.plot(time_steps, approximated, linestyle='--', label=f"approximated y{idx + 1}")
+                plt.legend()
+                plt.xlabel("time steps")
+                plt.ylabel("y")
+                plt.title(f"comparison of original and approximated y{idx + 1}")
+            
+            # adjust layout for better spacing
+            plt.tight_layout(h_pad=2.0, w_pad=1.5)
             plt.show()
             return beta_values
 
